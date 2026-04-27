@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>История баланса</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 20px auto;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .navbar {
+            display: flex;
+            justify-content: space-around;
+            background: #fafafa;
+            border-bottom: 1px solid #ddd;
+        }
+        .navbar a {
+            padding: 12px 20px;
+            text-decoration: none;
+            color: #333;
+            font-weight: 500;
+        }
+        .navbar a.active {
+            color: #007bff;
+            border-bottom: 3px solid #007bff;
+        }
+        .navbar a:hover {
+            background: #f0f0f0;
+        }
+        .content {
+            padding: 20px;
+        }
+        h1 {
+            margin: 0 0 20px;
+            font-size: 1.4em;
+        }
+        .btn-refresh {
+            margin-bottom: 10px;
+            padding: 6px 12px;
+            background: #17a2b8;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .btn-refresh:hover {
+            background: #138496;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 8px 12px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background: #f0f0f0;
+        }
+        .no-data, .auth-error {
+            text-align: center;
+            color: #777;
+            padding: 30px 0;
+            font-size: 1.1em;
+        }
+        .auth-error a {
+            color: #007bff;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav class="navbar">
+            <a href="/portfolio.html">Портфель</a>
+            <a href="/markets.html">Рынки</a>
+            <a href="/accounts.html">Мои счета</a>
+            <a href="/orders.html">Мои заявки</a>
+            <a href="/transactions.html">Мои транзакции</a>
+            <a href="/balance_history.html" class="active">История баланса</a>
+        </nav>
+        <div class="content">
+            <h1>История операций по балансу</h1>
+            <button class="btn-refresh" onclick="loadHistory()">Обновить</button>
+            <table id="historyTable">
+                <thead>
+                    <tr>
+                        <th>Сумма</th>
+                        <th>Валюта</th>
+                        <th>Тип операции</th>
+                        <th>Дата</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td colspan="4" class="no-data">загрузка...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Получаем токен из localStorage
+        const token = localStorage.getItem('jwt_token');
+        console.log("[BALANCE_HISTORY] Токен при загрузке страницы:", 
+            token ? `есть (длина ${token.length})` : "ОТСУТСТВУЕТ");
+
+        // Если токена нет — сразу показываем ошибку авторизации
+        if (!token) {
+            document.querySelector('#historyTable tbody').innerHTML = `
+                <tr>
+                    <td colspan="4" class="auth-error">
+                        Необходимо войти в систему<br>
+                        <a href="/login.html">Перейти на страницу входа</a>
+                    </td>
+                </tr>`;
+        }
+
+        async function loadHistory() {
+            const tbody = document.querySelector('#historyTable tbody');
+
+            if (!token) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="auth-error">
+                            Необходимо войти в систему<br>
+                            <a href="/login.html">Перейти на страницу входа</a>
+                        </td>
+                    </tr>`;
+                return;
+            }
+
+            tbody.innerHTML = '<tr><td colspan="4" class="no-data">загрузка...</td></tr>';
+
+            try {
+                console.log("[BALANCE_HISTORY] Запрос к /api/accounts/history с токеном");
+
+                const resp = await fetch('/api/accounts/history', {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                console.log("[BALANCE_HISTORY] Ответ сервера:", resp.status);
+
+                if (resp.status === 401) {
+                    console.warn("[BALANCE_HISTORY] 401 — токен недействителен");
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="4" class="auth-error">
+                                Сессия истекла или токен недействителен (401)<br>
+                                <a href="/login.html">Войти заново</a> | 
+                                <a href="#" onclick="localStorage.removeItem('jwt_token'); location.reload();">Очистить токен</a>
+                            </td>
+                        </tr>`;
+                    return;
+                }
+
+                if (!resp.ok) {
+                    throw new Error(`HTTP ${resp.status}`);
+                }
+
+                const list = await resp.json();
+
+                if (!list || list.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="no-data">Операций нет</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = '';
+
+                for (const op of list) {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${Number(op.amount).toFixed(2)}</td>
+                        <td>${op.currencyCode}</td>
+                        <td>${op.transactionType}</td>
+                        <td>${new Date(op.transactionDate).toLocaleString('ru-RU')}</td>
+                    `;
+                    tbody.appendChild(tr);
+                }
+
+            } catch (err) {
+                console.error('[BALANCE_HISTORY] Ошибка загрузки истории:', err);
+                tbody.innerHTML = '<tr><td colspan="4" class="no-data">Ошибка загрузки истории</td></tr>';
+            }
+        }
+
+        // Загружаем данные после загрузки страницы
+        window.addEventListener('DOMContentLoaded', () => {
+            if (token) {
+                loadHistory();
+            }
+        });
+    </script>
+</body>
+</html>
