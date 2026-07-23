@@ -1,0 +1,232 @@
+networks:
+  broker-network:
+    driver: bridge
+
+services:
+  postgres_auth:
+    image: postgres:17
+    container_name: postgres_auth
+    environment:
+      POSTGRES_DB: broker_auth
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: mypassword
+    volumes:
+      - "./db dumps/broker_auth.sql:/docker-entrypoint-initdb.d/broker_auth.sql"
+      - pg_auth_data:/var/lib/postgresql/data
+    ports:
+      - "15432:5432"
+    networks:
+      - broker-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres_market:
+    image: postgres:17
+    container_name: postgres_market
+    environment:
+      POSTGRES_DB: broker_market
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: mypassword
+    volumes:
+      - "./db dumps/broker_market.sql:/docker-entrypoint-initdb.d/broker_market.sql"
+      - pg_market_data:/var/lib/postgresql/data
+    ports:
+      - "15433:5432"
+    networks:
+      - broker-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres_orders:
+    image: postgres:17
+    container_name: postgres_orders
+    environment:
+      POSTGRES_DB: broker_orders
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: mypassword
+    volumes:
+      - "./db dumps/broker_orders.sql:/docker-entrypoint-initdb.d/broker_orders.sql"
+      - pg_orders_data:/var/lib/postgresql/data
+    ports:
+      - "15434:5432"
+    networks:
+      - broker-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres_savings:
+    image: postgres:17
+    container_name: postgres_savings
+    environment:
+      POSTGRES_DB: broker_savings
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: mypassword
+    volumes:
+      - "./db dumps/broker_savings.sql:/docker-entrypoint-initdb.d/broker_savings.sql"
+      - pg_savings_data:/var/lib/postgresql/data
+    ports:
+      - "15435:5432"
+    networks:
+      - broker-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    ports:
+      - "2181:2181"
+    networks:
+      - broker-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "7075:7075"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:7075
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:7075
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - broker-network
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server kafka:9092 --list"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+
+  auth-service:
+    build:
+      context: ./auth-service
+    container_name: auth-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres_auth:5432/broker_auth
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: mypassword
+      SERVER_PORT: 7071
+    ports:
+      - "7071:7071"
+    depends_on:
+      postgres_auth:
+        condition: service_healthy
+    networks:
+      - broker-network
+    restart: on-failure
+
+  gateway-service:
+    build:
+      context: ./gateway-service
+    container_name: gateway-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres_auth:5432/broker_auth
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: mypassword
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_SECRET_KEY: ZzYJ/6d54kjZQM2z0a02xMfHyZAeDq+krlmL8DAnR5KiyeLQfEvj19ZgkLmXX7WcZd3L5XsCNN04B+X0jhhKbg==
+      SERVER_PORT: 7070
+      AUTH_SERVICE_URL: http://auth-service:7071
+      SAVINGS_SERVICE_URL: http://savings-service:7072
+      MARKET_SERVICE_URL: http://market-service:7073
+      ORDER_SERVICE_URL: http://order-service:7074
+    ports:
+      - "7070:7070"
+    depends_on:
+      postgres_auth:
+        condition: service_healthy
+    networks:
+      - broker-network
+    restart: on-failure
+
+  market-service:
+    build:
+      context: ./market-service
+    container_name: market-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres_market:5432/broker_market
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: mypassword
+      FINNHUB_API_KEY: ${FINNHUB_API_KEY:?Missing FINNHUB_API_KEY in .env}
+      SERVER_PORT: 7073
+    ports:
+      - "7073:7073"
+    depends_on:
+      postgres_market:
+        condition: service_healthy
+    networks:
+      - broker-network
+    restart: on-failure
+
+  savings-service:
+    build:
+      context: ./savings-service
+    container_name: savings-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres_savings:5432/broker_savings
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: mypassword
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_KAFKA_CONSUMER_GROUP_ID: savings-group
+      SERVER_PORT: 7072
+    ports:
+      - "7072:7072"
+    depends_on:
+      postgres_savings:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - broker-network
+    restart: on-failure
+
+  order-service:
+    build:
+      context: ./order-service  
+    container_name: order-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres_orders:5432/broker_orders
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: mypassword
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_KAFKA_CONSUMER_GROUP_ID: saga-group
+      SERVER_PORT: 7074
+      MARKET_SERVICE_URL: http://market-service:7073
+      SAVINGS_SERVICE_URL: http://savings-service:7072
+    ports:
+      - "7074:7074"
+    depends_on:
+      postgres_orders:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - broker-network
+    restart: on-failure
+
+volumes:
+  pg_auth_data:
+  pg_market_data:
+  pg_orders_data:
+  pg_savings_data:
