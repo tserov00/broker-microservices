@@ -28,9 +28,6 @@ public class SavingsAccountsKafkaListeners {
         this.objectMapper = objectMapper;
     }
 
-    // =========================
-    // 💰 RESERVE MONEY
-    // =========================
     @KafkaListener(topics = "amount.reserve", groupId = "savings-group")
     public void onReserveAmount(byte[] message) {
         try {
@@ -55,9 +52,7 @@ public class SavingsAccountsKafkaListeners {
             );
 
         } catch (Exception e) {
-            // В случае ошибки тоже нужно отправить событие с флагом success=false
             try {
-                // Пытаемся извлечь sagaId и operationId, чтобы отправить ответ
                 ReserveAmountCommand cmd = objectMapper.readValue(message, ReserveAmountCommand.class);
                 kafkaSenderService.send(
                         "amount.reserved",
@@ -70,15 +65,10 @@ public class SavingsAccountsKafkaListeners {
                         )
                 );
             } catch (Exception ex) {
-                // Если совсем не можем разобрать сообщение, логируем
-                // log.error("Failed to process amount.reserve", ex);
             }
         }
     }
 
-    // =========================
-    // 💰 RELEASE MONEY
-    // =========================
     @KafkaListener(topics = "amount.release", groupId = "savings-group")
     public void onReleaseAmount(byte[] message) {
         try {
@@ -116,14 +106,10 @@ public class SavingsAccountsKafkaListeners {
                         )
                 );
             } catch (Exception ex) {
-                // log.error("Failed to process amount.release", ex);
             }
         }
     }
 
-    // =========================
-    // 🔁 TRANSFER MONEY
-    // =========================
     @KafkaListener(topics = "money.transfer", groupId = "savings-group")
     public void onTransferMoney(byte[] message) {
         try {
@@ -163,7 +149,6 @@ public class SavingsAccountsKafkaListeners {
                         )
                 );
             } catch (Exception ex) {
-                // log.error("Failed to process money.transfer", ex);
             }
         }
     }

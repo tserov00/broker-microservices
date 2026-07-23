@@ -20,9 +20,6 @@ public class KafkaSenderService {
         this.objectMapper = objectMapper;
     }
 
-    // =========================
-    // BASE SEND (STRING KEY)
-    // =========================
     public void send(String topic, String key, Object payload) {
         try {
             byte[] message = objectMapper.writeValueAsBytes(payload);
@@ -32,9 +29,6 @@ public class KafkaSenderService {
         }
     }
 
-    // =========================
-    // UUID KEY SUPPORT
-    // =========================
     public void send(String topic, UUID key, Object payload) {
         send(topic, key.toString(), payload);
     }
