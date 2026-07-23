@@ -6,9 +6,12 @@
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
+        <module name="savings-service" />
+        <module name="auth-service" />
+        <module name="order-service" />
         <module name="gateway-service" />
       </profile>
-      <profile name="Annotation profile for savings-service" enabled="true">
+      <profile name="Annotation profile for market-service" enabled="true">
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
@@ -16,14 +19,12 @@
           <entry name="$MAVEN_REPOSITORY$/org/mapstruct/mapstruct-processor/1.5.5.Final/mapstruct-processor-1.5.5.Final.jar" />
           <entry name="$MAVEN_REPOSITORY$/org/mapstruct/mapstruct/1.5.5.Final/mapstruct-1.5.5.Final.jar" />
         </processorPath>
-        <module name="savings-service" />
-        <module name="auth-service" />
-        <module name="order-serivce" />
         <module name="market-service" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
       <module name="market-module" target="17" />
+      <module name="order-serivce" target="23" />
       <module name="portfolio-service" target="23" />
     </bytecodeTargetLevel>
   </component>
@@ -34,6 +35,7 @@
       <module name="market-module" options="-parameters" />
       <module name="market-service" options="-parameters" />
       <module name="order-serivce" options="-parameters" />
+      <module name="order-service" options="-parameters" />
       <module name="portfolio-service" options="-parameters" />
       <module name="savings-service" options="-parameters" />
     </option>
